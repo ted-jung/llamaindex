@@ -6,7 +6,7 @@ const Header = () => {
       </div>
       <div className='app-header__sub'>
         <div>
-          <p>Ted's React-Flask Demo</p>
+          <p>Ted's RFA(React-Flask-API) Demo</p>
         </div>
       </div>
     </header>
