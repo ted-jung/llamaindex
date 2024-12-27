@@ -1,5 +1,5 @@
 ## How to run?
-location: ted-pjt/python/llama/web-app
+location: ted-pjt/python/llama/web-app/ted-ai-app
 
 1. run flask_demo2.py
 2. run index_server.py
