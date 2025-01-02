@@ -20,7 +20,7 @@ import clickhouse_connect
 
 
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
-Settings.llm = Ollama(model="llama3.2", request_timeout=360.0)
+Settings.llm = Ollama(model="llama3.2", request_timeout=1500.0)
 
 client = clickhouse_connect.get_client(
     host="localhost",
@@ -112,7 +112,7 @@ vector_store_info = VectorStoreInfo(
     ],
 )
 vector_auto_retriever = VectorIndexAutoRetriever(vector_index, vector_store_info=vector_store_info)
-retriever_query_engine = RetrieverQueryEngine.from_args(vector_auto_retriever, llm=Ollama(model="llama3.2"))
+retriever_query_engine = RetrieverQueryEngine.from_args(vector_auto_retriever)
 
 
 
@@ -134,8 +134,10 @@ vector_tool = QueryEngineTool.from_defaults(
 
 
 from llama_index.core.query_engine import SQLAutoVectorQueryEngine
+
+# two tools (one is for sql the other is for vector)
 query_engine = SQLAutoVectorQueryEngine(
-    sql_tool, vector_tool, llm=Ollama(model="llama3.2"),
+    sql_tool, vector_tool,
 )
 
 response = query_engine.query(
