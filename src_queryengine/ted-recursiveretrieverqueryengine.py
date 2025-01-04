@@ -21,6 +21,7 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
 Settings.llm = Ollama(model="llama3.2", request_timeout=1500.0)
+Settings.chunk_size = 2048
 
 file_path = "./data/billionaire/billionaires_page.pdf"
 # initialize PDF reader
@@ -90,7 +91,7 @@ vector_index = VectorStoreIndex(doc_nodes + df_nodes)
 vector_retriever = vector_index.as_retriever(similarity_top_k=1)
 
 
-# baseline vector index (that doesn't include the extra df nodes).
+# baseline vector index (that doesn't include the extra df_nodes).
 # used to benchmark
 vector_index0 = VectorStoreIndex(doc_nodes)
 vector_query_engine0 = vector_index0.as_query_engine()
@@ -102,9 +103,7 @@ recursive_retriever = RecursiveRetriever(
     query_engine_dict=df_id_query_engine_mapping,
     verbose=True,
 )
-
 response_synthesizer = get_response_synthesizer(response_mode="compact")
-
 query_engine = RetrieverQueryEngine.from_args(
     recursive_retriever, response_synthesizer=response_synthesizer
 )
@@ -112,19 +111,17 @@ query_engine = RetrieverQueryEngine.from_args(
 response = query_engine.query(
     "What's the Net worth\n(USD) of the second richest billionaire in 2023?"
 )
+print(response.source_nodes[0].node.get_content())
+print(str(response))
 
-print(response)
 
 response = vector_query_engine0.query(
     "How many billionaires were there in 2009?"
 )
-
+print(response.source_nodes[0].node.get_content())
 print(str(response))
-
-response.source_nodes[0].node.get_content()
 
 response = query_engine.query(
     "Which billionaires are excluded from this list?"
 )
-
 print(str(response))
