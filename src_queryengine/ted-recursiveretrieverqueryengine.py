@@ -41,7 +41,7 @@ def get_tables(path: str, pages: List[int]):
         table_dfs.append(table_df)
     return table_dfs
 
-table_dfs = get_tables(file_path, pages=[3,25])
+table_dfs = get_tables(file_path, pages=[3,27])
 # shows list of top billionaires in 2023
 print(table_dfs[0])
 
@@ -52,18 +52,18 @@ df_query_engines = [
     PandasQueryEngine(table_df) for table_df in table_dfs
 ]
 
-# response = df_query_engines[1].query(
-#     "How many billionaires were there in 2009?"
-# )
-# print(str(response)) 
+response = df_query_engines[1].query(
+    "How many billionaires were there in 2009?"
+)
+print(str(response)) 
 
-# response = df_query_engines[0].query(
-#     "What's the Net worth USD of the second richest billionaire in 2023?"
-# )
-# print(str(response))
+response = df_query_engines[0].query(
+    "What's the Net worth\n(USD) of the second richest billionaire in 2023?"
+)
+print(str(response))
 
 
-doc_nodes = Settings.node_parser.get_nodes_from_documents(docs)
+doc_nodes = Settings.node_parser.get_nodes_from_documents(docs,show_progress=False)
 
 # define index nodes
 summaries = [
@@ -73,18 +73,16 @@ summaries = [
     ),
     (
         "This node provides information on the number of billionaires and"
-        " their combined net worth from 2000 to 2023."
+        " their combined Net worth\n(USD) from 2000 to 2023."
     ),
 ]
 
 df_nodes = [
-    IndexNode(text=summary, index_id=f"pandas{idx}")
-    for idx, summary in enumerate(summaries)
+    IndexNode(text=summary, index_id=f"pandas{idx}") for idx, summary in enumerate(summaries)
 ]
 
 df_id_query_engine_mapping = {
-    f"pandas{idx}": df_query_engine
-    for idx, df_query_engine in enumerate(df_query_engines)
+    f"pandas{idx}": df_query_engine for idx, df_query_engine in enumerate(df_query_engines)
 }
 
 # construct top-level vector index + query engine

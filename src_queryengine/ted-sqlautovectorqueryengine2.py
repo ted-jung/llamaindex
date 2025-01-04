@@ -141,7 +141,13 @@ query_engine = SQLAutoVectorQueryEngine(
 )
 
 response = query_engine.query(
-    "Tell me about the arts and culture of the city with the highest population"
+    "Tell me about the arts and culture of the city with the highest"
+    " population"
 )
 
 print(response)
+print(100*"*")
+
+response = query_engine.query("Tell me about the history of Berlin")
+print(response)
+print(100*"*")
