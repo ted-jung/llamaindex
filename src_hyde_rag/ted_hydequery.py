@@ -9,6 +9,7 @@ from llama_index.core import Settings
 from llama_index.llms.ollama import Ollama
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
 from llama_index.core.indices.query.query_transform import HyDEQueryTransform
+from llama_index.core.indices.vector_store import v
 from llama_index.core.query_engine import TransformQueryEngine
 from IPython.display import Markdown, display
 
