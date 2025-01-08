@@ -5,8 +5,7 @@ from llama_index.llms.ollama import Ollama
 from llama_index.core import Settings
 
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
-llm = Ollama(model="llama3.2", request_timeout=720.0)
-Settings.llm = llm
+Settings.llm = Ollama(model="llama3.2", request_timeout=720.0)
 
 
 from llama_index.core.indices.struct_store.sql_query import (
@@ -75,7 +74,9 @@ query_engine = SQLTableRetrieverQueryEngine(
 )
 
 response = query_engine.query("Which city has the highest population?")
-print(response)
+#response.source_nodes
+for i in response.source_nodes:
+    print(i.text)
 
 response = query_engine.query("the sum of total population of all cities?")
 print(response)
@@ -92,14 +93,15 @@ nl_sql_retriever = NLSQLRetriever(
 results = nl_sql_retriever.retrieve(
     "Return the top 5 cities (along with their populations) with the highest population."
 )
-print("==="+results)
+for result in results:
+    print(result)
 
 from llama_index.core.response.notebook_utils import display_source_node
 
 for n in results:
     display_source_node(n)
-    
-    
+
+
 from llama_index.core.query_engine import RetrieverQueryEngine
 
 query_engine = RetrieverQueryEngine.from_args(nl_sql_retriever)
