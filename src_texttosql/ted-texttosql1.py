@@ -1,12 +1,32 @@
 import os
 import asyncio
 import json
+import re
 import pandas as pd
 from pathlib import Path
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.ollama import Ollama
 from llama_index.core.prompts import ChatPromptTemplate
-from llama_index.core import Settings
+from llama_index.core import (
+    Settings,
+    SQLDatabase, 
+    VectorStoreIndex,
+    PromptTemplate,
+)
+from llama_index.core.objects import (
+    SQLTableNodeMapping,
+    ObjectIndex,
+    SQLTableSchema,
+)
+from llama_index.core.workflow import (
+    Workflow,
+    StartEvent,
+    StopEvent,
+    step,
+    Context,
+    Event,
+)
+
 from llama_index.core.bridge.pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage
 
@@ -14,7 +34,21 @@ Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
 llm = Ollama(model="llama3.2", request_timeout=720.0)
 Settings.llm = llm
 
-data_dir = Path("./data/wiki/WikiTableQuestions/csv/100-csv")
+def delete_file(directory_path):
+  if not os.path.exists(directory_path):
+    raise FileNotFoundError(f"Directory '{directory_path}' not found.")
+
+  for filename in os.listdir(directory_path):
+    file_path = os.path.join(directory_path, filename)
+    try:
+      if os.path.isfile(file_path):
+        os.remove(file_path)
+        print(f"Deleted file: {file_path}")
+    except OSError as e:
+      print(f"Error deleting file '{file_path}': {e}")
+
+
+data_dir = Path("./data/wiki/WikiTableQuestions/csv/200-csv")
 csv_files = sorted([f for f in data_dir.glob("*.csv")])
 dfs = []
 for csv_file in csv_files:
@@ -27,10 +61,12 @@ for csv_file in csv_files:
   
 
 tableinfo_dir = "WikiTableQuestions_TableInfo"
+delete_file("./data/wiki/"+tableinfo_dir)
 if not os.path.exists("./data/wiki/"+tableinfo_dir):
     os.mkdir("./data/wiki/"+tableinfo_dir)
 
 
+# Extract Table Name & Summary from each Table
 class TableInfo(BaseModel):
     """Information regarding a structured table."""
 
@@ -56,7 +92,6 @@ Table:
 Summary: """
 
 prompt_tmpl = ChatPromptTemplate(message_templates=[ChatMessage.from_str(prompt_str, role="user")])
-
 
 def _get_tableinfo_with_index(idx: int) -> str:
     results_gen = Path(f"./data/wiki/{tableinfo_dir}").glob(f"{idx}_*")
@@ -97,12 +132,11 @@ for idx, df in enumerate(dfs):
                 print(f"Table name {table_name} already exists, trying again.")
                 pass
 
-        out_file = f"./data/wiki/{tableinfo_dir}/{idx}_{table_name}.json"
+        out_file = f"./data/wiki/{tableinfo_dir}/{idx}_{table_name}.json".replace(" ", "_")
         if not os.path.isfile(out_file):
             json.dump(table_info.dict(), open(out_file, "w"))
             
     table_infos.append(table_info)
-
 
 
 # put data into sqlite db
@@ -113,8 +147,21 @@ from sqlalchemy import (
     Column,
     String,
     Integer,
+    inspect,
 )
-import re
+
+def delete_all_tables(engine):
+    inspector = inspect(engine)
+    temp_metadata = MetaData()
+    
+    for table_name in inspector.get_table_names():
+        try:
+            table = Table(table_name, temp_metadata, autoload_with=engine)
+            table.drop(engine, checkfirst=True)
+            print(f"Deleted table: {table_name}")
+        except Exception as e:
+            print(f"Error: {e}")
+
 
 # Function to create a sanitized column name
 def sanitize_column_name(col_name):
@@ -135,7 +182,12 @@ def create_table_from_dataframe(df: pd.DataFrame, table_name: str, engine, metad
     ]
 
     # Create a table with the defined columns
+    table_name = table_name.replace(" ","_")
     table = Table(table_name, metadata_obj, *columns)
+
+    # delte all
+    # delete_stmt = table.delete()
+    # conn.execute(delete_stmt)
 
     # Create the table in the database
     metadata_obj.create_all(engine)
@@ -151,26 +203,21 @@ def create_table_from_dataframe(df: pd.DataFrame, table_name: str, engine, metad
 # engine = create_engine("sqlite:///:memory:")
 engine = create_engine("sqlite:///wiki_table_questions.db")
 metadata_obj = MetaData()
+delete_all_tables(engine)
+
 for idx, df in enumerate(dfs):
     tableinfo = _get_tableinfo_with_index(idx)
     print(f"Creating table: {tableinfo.table_name}")
     create_table_from_dataframe(df, tableinfo.table_name, engine, metadata_obj)
-    
-    
 
-from llama_index.core.objects import (
-    SQLTableNodeMapping,
-    ObjectIndex,
-    SQLTableSchema,
-)
-from llama_index.core import SQLDatabase, VectorStoreIndex
+ 
+# build obj_retriever via ObjectIndex
 
 sql_database = SQLDatabase(engine)
 
 table_node_mapping = SQLTableNodeMapping(sql_database)
 table_schema_objs = [
-    SQLTableSchema(table_name=t.table_name, context_str=t.table_summary)
-    for t in table_infos
+    SQLTableSchema(table_name=t.table_name.replace(" ","_"), context_str=t.table_summary) for t in table_infos
 ]  # add a SQLTableSchema for each table
 
 obj_index = ObjectIndex.from_objects(
@@ -181,11 +228,12 @@ obj_index = ObjectIndex.from_objects(
 obj_retriever = obj_index.as_retriever(similarity_top_k=3)
 
 
+# build sql_retriever via SQLRetriever
+
 from llama_index.core.retrievers import SQLRetriever
 from typing import List
 
 sql_retriever = SQLRetriever(sql_database)
-
 
 def get_table_context_str(table_schema_objs: List[SQLTableSchema]):
     """Get table context string."""
@@ -201,8 +249,9 @@ def get_table_context_str(table_schema_objs: List[SQLTableSchema]):
 
         context_strs.append(table_info)
     return "\n\n".join(context_strs)
+
+
 from llama_index.core.prompts.default_prompts import DEFAULT_TEXT_TO_SQL_PROMPT
-from llama_index.core import PromptTemplate
 from llama_index.core.llms import ChatResponse
 
 
@@ -221,9 +270,7 @@ def parse_response_to_sql(chat_response: ChatResponse) -> str:
     return response.strip().strip("```").strip()
 
 
-text2sql_prompt = DEFAULT_TEXT_TO_SQL_PROMPT.partial_format(
-    dialect=engine.dialect.name
-)
+text2sql_prompt = DEFAULT_TEXT_TO_SQL_PROMPT.partial_format(dialect=engine.dialect.name)
 print(text2sql_prompt.template)
 
 
@@ -234,34 +281,19 @@ response_synthesis_prompt_str = (
     "SQL Response: {context_str}\n"
     "Response: "
 )
-response_synthesis_prompt = PromptTemplate(
-    response_synthesis_prompt_str,
-)
+response_synthesis_prompt = PromptTemplate(response_synthesis_prompt_str,)
 
 
-from llama_index.core.workflow import (
-    Workflow,
-    StartEvent,
-    StopEvent,
-    step,
-    Context,
-    Event,
-)
-
-
+# workflow
 class TableRetrieveEvent(Event):
     """Result of running table retrieval."""
-
     table_context_str: str
     query: str
 
-
 class TextToSQLEvent(Event):
     """Text-to-SQL event."""
-
     sql: str
     query: str
-
 
 class TextToSQLWorkflow1(Workflow):
     """Text-to-SQL Workflow that does query-time table retrieval."""
@@ -316,21 +348,17 @@ class TextToSQLWorkflow1(Workflow):
         return StopEvent(result=chat_response)
     
     
-from llama_index.core.workflow import draw_all_possible_flows
+# from llama_index.core.workflow import draw_all_possible_flows
+# from IPython.display import display, HTML
 
-draw_all_possible_flows(
-    TextToSQLWorkflow1, filename="text_to_sql_table_retrieval.html"
-)
-
-
-from IPython.display import display, HTML
-
-# Read the contents of the HTML file
-with open("text_to_sql_table_retrieval.html", "r") as file:
-    html_content = file.read()
-
-# Display the HTML content
-display(HTML(html_content))
+# draw_all_possible_flows(
+#     TextToSQLWorkflow1, filename="text_to_sql_table_retrieval.html"
+# )
+# # Read the contents of the HTML file
+# with open("text_to_sql_table_retrieval.html", "r") as file:
+#     html_content = file.read()
+# # Display the HTML content
+# display(HTML(html_content))
 
 
 workflow = TextToSQLWorkflow1(
