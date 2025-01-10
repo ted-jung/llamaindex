@@ -47,8 +47,8 @@ def delete_file(directory_path):
     except OSError as e:
       print(f"Error deleting file '{file_path}': {e}")
 
-
-data_dir = Path("./data/wiki/WikiTableQuestions/csv/200-csv")
+# Directory for wiki's data
+data_dir = Path("./data/wiki/WikiTableQuestions/csv/100-csv")
 csv_files = sorted([f for f in data_dir.glob("*.csv")])
 dfs = []
 for csv_file in csv_files:
@@ -58,8 +58,9 @@ for csv_file in csv_files:
         dfs.append(df)
     except Exception as e:
         print(f"Error parsing {csv_file}: {str(e)}")
-  
 
+
+# Make json files where it's metadata stored in.
 tableinfo_dir = "WikiTableQuestions_TableInfo"
 delete_file("./data/wiki/"+tableinfo_dir)
 if not os.path.exists("./data/wiki/"+tableinfo_dir):
@@ -67,6 +68,7 @@ if not os.path.exists("./data/wiki/"+tableinfo_dir):
 
 
 # Extract Table Name & Summary from each Table
+# Pydantic class(to instantiate a structured LLM)
 class TableInfo(BaseModel):
     """Information regarding a structured table."""
 
@@ -78,18 +80,19 @@ class TableInfo(BaseModel):
     )
 
 
-prompt_str = """\
-Give me a summary of the table with the following JSON format.
+prompt_str = """
+    Give me a summary of the table with the following JSON format.
 
-- The table name must be unique to the table and describe it while being concise. 
-- Do NOT output a generic table name (e.g. table, my_table).
+    - The table name must be unique to the table and describe it while being concise. 
+    - Do NOT output a generic table name (e.g. table, my_table).
 
-Do NOT make the table name one of the following: {exclude_table_name_list}
+    Do NOT make the table name one of the following: {exclude_table_name_list}
 
-Table:
-{table_str}
+    Table:
+    {table_str}
 
-Summary: """
+    Summary: 
+"""
 
 prompt_tmpl = ChatPromptTemplate(message_templates=[ChatMessage.from_str(prompt_str, role="user")])
 
@@ -210,10 +213,11 @@ for idx, df in enumerate(dfs):
     print(f"Creating table: {tableinfo.table_name}")
     create_table_from_dataframe(df, tableinfo.table_name, engine, metadata_obj)
 
- 
-# build obj_retriever via ObjectIndex
 
 sql_database = SQLDatabase(engine)
+
+# Build obj_retriever via ObjectIndex
+# schema, node mapping and index
 
 table_node_mapping = SQLTableNodeMapping(sql_database)
 table_schema_objs = [
@@ -373,7 +377,8 @@ workflow = TextToSQLWorkflow1(
 
 async def my_async_function():
     response = await workflow.run(
-        query="What was the year that The Notorious B.I.G was signed to Bad Boy?"
+        #query="What was the year that The Notorious B.I.G was signed to Bad Boy?"
+        query="What movie has the word 'ring' in its title?"
     )
     print(str(response))
 
