@@ -14,6 +14,8 @@ from llama_index.core.retrievers import SQLRetriever
 from llama_index.core.schema import TextNode
 from llama_index.core.bridge.pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage
+from llama_index.core.prompts.default_prompts import DEFAULT_TEXT_TO_SQL_PROMPT
+from llama_index.core.llms import ChatResponse
 
 from llama_index.core import (
     Settings,
@@ -162,9 +164,7 @@ for idx, df in enumerate(dfs):
     table_infos.append(table_info)
 
 
-# put data into sqlite db
-
-
+# Initialize table list
 def delete_all_tables(engine):
     inspector = inspect(engine)
     temp_metadata = MetaData()
@@ -244,39 +244,49 @@ obj_retriever = obj_index.as_retriever(similarity_top_k=3)
 
 
 # Index each Table
-# This is to get better relevant result relevant when querying on field value(i.g, B.I.G, BIG)
+# This is to get better relevant result when querying on field value(i.g, B.I.G, BIG)
 
 def index_all_tables(
-    sql_database: SQLDatabase, table_index_dir: str = f"./data/wiki/"+tableinfo_dir) -> Dict[str, VectorStoreIndex]:
+    sql_database: SQLDatabase, table_index_dir: str = "table_index_dir") -> Dict[str, VectorStoreIndex]:
     """Index all tables."""
-    if not Path(table_index_dir).exists():
-        os.makedirs(table_index_dir)
+    if not Path("./data/wiki/"+table_index_dir).exists():
+        os.makedirs("./data/wiki/"+table_index_dir)
 
     vector_index_dict = {}
-    # engine = sql_database.engine
-    for table_name in sql_database.get_usable_table_names():
+    # sql_database = sql_database.engine
+    
+    inspector = inspect(engine)
+            
+    for table_name in inspector.get_table_names():
         print(f"Indexing rows in table: {table_name}")
-        if not os.path.exists(f"{table_index_dir}/{table_name}"):
+        if not os.path.exists(f"./data/wiki/{table_index_dir}/{table_name}"): 
             # get all rows from table
-            cursor = sql_database.run_sql(text(f'SELECT * FROM "{table_name}"'))
-            result = cursor.fetchall()
+            cursor = sql_database.run_sql(str(text(f'SELECT * FROM "{table_name}"')))
             row_tups = []
-            for row in result:
-                row_tups.append(tuple(row))
+            # print(type(cursor[0]))
+            # print(type(cursor[1]))
+            print(type(cursor[1]['result']))
+            # column_names, *rows = cursor
+
+            # for row in cursor[1]['result']:
+            #     print(row)
+            #     row_tups.append(tuple(row))
+
+            row_tups = cursor[1]['result']
 
             # index each row, put into vector store index
             nodes = [TextNode(text=str(t)) for t in row_tups]
 
             # put into vector store index (use OpenAIEmbeddings by default)
-            index = VectorStoreIndex(nodes)
+            vs_index = VectorStoreIndex(nodes)
 
             # save index
-            index.set_index_id("vector_index")
-            index.storage_context.persist(f"{table_index_dir}/{table_name}")
+            vs_index.set_index_id("vector_index")
+            vs_index.storage_context.persist(f"./data/wiki/{table_index_dir}/{table_name}")
         else:
             # rebuild storage context
             storage_context = StorageContext.from_defaults(
-                persist_dir=f"{table_index_dir}/{table_name}"
+                persist_dir=f"./data/wiki/{table_index_dir}/{table_name}"
             )
             # load index
             index = load_index_from_storage(
@@ -285,9 +295,6 @@ def index_all_tables(
         vector_index_dict[table_name] = index
 
     return vector_index_dict
-
-
-vector_index_dict = index_all_tables(sql_database)
 
 
 # Define expanded table parsing
@@ -326,10 +333,10 @@ def get_table_context_and_rows_str(
     return "\n\n".join(context_strs)
 
 
-# build sql_retriever via SQLRetriever
+vector_index_dict = index_all_tables(sql_database)
 
 
-
+# Build sql_retriever via SQLRetriever
 sql_retriever = SQLRetriever(sql_database)
 
 def get_table_context_str(table_schema_objs: List[SQLTableSchema]):
@@ -346,10 +353,6 @@ def get_table_context_str(table_schema_objs: List[SQLTableSchema]):
 
         context_strs.append(table_info)
     return "\n\n".join(context_strs)
-
-
-from llama_index.core.prompts.default_prompts import DEFAULT_TEXT_TO_SQL_PROMPT
-from llama_index.core.llms import ChatResponse
 
 
 def parse_response_to_sql(chat_response: ChatResponse) -> str:
@@ -421,7 +424,7 @@ class TextToSQLWorkflow1(Workflow):
         return TableRetrieveEvent(
             table_context_str=table_context_str, query=ev.query
         )
-        
+
     @step
     async def generate_sql(self, ctx: Context, ev: TableRetrieveEvent) -> TextToSQLEvent:
         """Generate SQL statement."""
@@ -443,7 +446,7 @@ class TextToSQLWorkflow1(Workflow):
         )
         chat_response = llm.chat(fmt_messages)
         return StopEvent(result=chat_response)
-    
+
 class TextToSQLWorkflow2(TextToSQLWorkflow1):
     """Text-to-SQL Workflow that does query-time row AND table retrieval."""
 
@@ -459,31 +462,11 @@ class TextToSQLWorkflow2(TextToSQLWorkflow1):
         )
 
 
-
 from llama_index.core.workflow import draw_all_possible_flows
-# from IPython.display import display, HTML
-
-# draw_all_possible_flows(
-#     TextToSQLWorkflow1, filename="text_to_sql_table_retrieval.html"
-# )
 draw_all_possible_flows(
     TextToSQLWorkflow2, filename="text_to_sql_table_retrieval2.html"
 )
-# # Read the contents of the HTML file
-# with open("text_to_sql_table_retrieval.html", "r") as file:
-#     html_content = file.read()
-# # Display the HTML content
-# display(HTML(html_content))
 
-
-workflow1 = TextToSQLWorkflow1(
-    obj_retriever,
-    text2sql_prompt,
-    sql_retriever,
-    response_synthesis_prompt,
-    llm,
-    verbose=True,
-)
 
 workflow2 = TextToSQLWorkflow2(
     obj_retriever,
@@ -501,11 +484,10 @@ async def my_async_function():
     # )
     
     response = await workflow2.run(
-        # query="What was the year that The Notorious BIG was signed to Bad Boy?"
-        query = "What movie has the word 'ring' in its title?"
+        query="What was the year that The Notorious BIG was signed to Bad Boy?"
+        # query = "What movie has the word 'ring' in its title?"
     )
     print(str(response))
-
 
 
 asyncio.run(my_async_function())
