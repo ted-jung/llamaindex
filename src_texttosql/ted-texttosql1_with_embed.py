@@ -69,8 +69,9 @@ def delete_file(directory_path):
     except OSError as e:
       print(f"Error deleting file '{file_path}': {e}")
 
+
 # Directory for wiki's data
-data_dir = Path("./data/wiki/WikiTableQuestions/csv/100-csv")
+data_dir = Path("./data/wiki/WikiTableQuestions/csv/200-csv")
 csv_files = sorted([f for f in data_dir.glob("*.csv")])
 dfs = []
 for csv_file in csv_files:
@@ -83,10 +84,17 @@ for csv_file in csv_files:
 
 
 # Make json files where it's metadata stored in.
-tableinfo_dir = "WikiTableQuestions_TableInfo"
-delete_file("./data/wiki/"+tableinfo_dir)
-if not os.path.exists("./data/wiki/"+tableinfo_dir):
-    os.mkdir("./data/wiki/"+tableinfo_dir)
+tableinfo_dir1 = "WikiTableQuestions_TableInfo"
+tableinfo_dir2 = "table_index_dir"
+directories = ["./data/wiki/"+tableinfo_dir1 , "./data/wiki/"+tableinfo_dir2]
+for directory in directories:
+    delete_file(directory)
+
+if not os.path.exists("./data/wiki/"+tableinfo_dir1):
+    os.mkdir("./data/wiki/"+tableinfo_dir1)
+
+if not os.path.exists("./data/wiki/"+tableinfo_dir2):
+    os.mkdir("./data/wiki/"+tableinfo_dir2)
 
 
 # Extract Table Name & Summary from each Table
@@ -119,7 +127,7 @@ prompt_str = """
 prompt_tmpl = ChatPromptTemplate(message_templates=[ChatMessage.from_str(prompt_str, role="user")])
 
 def _get_tableinfo_with_index(idx: int) -> str:
-    results_gen = Path(f"./data/wiki/{tableinfo_dir}").glob(f"{idx}_*")
+    results_gen = Path(f"./data/wiki/{tableinfo_dir1}").glob(f"{idx}_*")
     results_list = list(results_gen)
     if len(results_list) == 0:
         return None
@@ -157,7 +165,7 @@ for idx, df in enumerate(dfs):
                 print(f"Table name {table_name} already exists, trying again.")
                 pass
 
-        out_file = f"./data/wiki/{tableinfo_dir}/{idx}_{table_name}.json".replace(" ", "_")
+        out_file = f"./data/wiki/{tableinfo_dir1}/{idx}_{table_name}.json".replace(" ", "_")
         if not os.path.isfile(out_file):
             json.dump(table_info.dict(), open(out_file, "w"))
             
@@ -278,11 +286,11 @@ def index_all_tables(
             nodes = [TextNode(text=str(t)) for t in row_tups]
 
             # put into vector store index (use OpenAIEmbeddings by default)
-            vs_index = VectorStoreIndex(nodes)
+            index = VectorStoreIndex(nodes)
 
             # save index
-            vs_index.set_index_id("vector_index")
-            vs_index.storage_context.persist(f"./data/wiki/{table_index_dir}/{table_name}")
+            index.set_index_id("vector_index")
+            index.storage_context.persist(f"./data/wiki/{table_index_dir}/{table_name}")
         else:
             # rebuild storage context
             storage_context = StorageContext.from_defaults(
@@ -292,6 +300,7 @@ def index_all_tables(
             index = load_index_from_storage(
                 storage_context, index_id="vector_index"
             )
+            
         vector_index_dict[table_name] = index
 
     return vector_index_dict
@@ -307,18 +316,14 @@ def get_table_context_and_rows_str(
     context_strs = []
     for table_schema_obj in table_schema_objs:
         # first append table info + additional context
-        table_info = sql_database.get_single_table_info(
-            table_schema_obj.table_name
-        )
+        table_info = sql_database.get_single_table_info(table_schema_obj.table_name)
         if table_schema_obj.context_str:
             table_opt_context = " The table description is: "
             table_opt_context += table_schema_obj.context_str
             table_info += table_opt_context
 
         # also lookup vector index to return relevant table rows
-        vector_retriever = vector_index_dict[
-            table_schema_obj.table_name
-        ].as_retriever(similarity_top_k=2)
+        vector_retriever = vector_index_dict[table_schema_obj.table_name].as_retriever(similarity_top_k=2)
         relevant_nodes = vector_retriever.retrieve(query_str)
         if len(relevant_nodes) > 0:
             table_row_context = "\nHere are some relevant example rows (values in the same order as columns above)\n"
@@ -484,7 +489,7 @@ async def my_async_function():
     # )
     
     response = await workflow2.run(
-        query="What was the year that The Notorious BIG was signed to Bad Boy?"
+        query="What was the year that The Notorious B.I.G was signed to Bad Boy?"
         # query = "What movie has the word 'ring' in its title?"
     )
     print(str(response))
