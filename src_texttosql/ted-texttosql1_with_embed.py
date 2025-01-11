@@ -70,8 +70,9 @@ def delete_file(directory_path):
       print(f"Error deleting file '{file_path}': {e}")
 
 
-# Directory for wiki's data
-data_dir = Path("./data/wiki/WikiTableQuestions/csv/200-csv")
+# Directory for reading with wiki's data as source
+# Create an arrary of dataframe using files in the directory
+data_dir = Path("./data/wiki/WikiTableQuestions/csv/100-csv")
 csv_files = sorted([f for f in data_dir.glob("*.csv")])
 dfs = []
 for csv_file in csv_files:
@@ -83,7 +84,8 @@ for csv_file in csv_files:
         print(f"Error parsing {csv_file}: {str(e)}")
 
 
-# Make json files where it's metadata stored in.
+# Two tables (one for metadata, the other for vector data)
+# Delete and Create for testing
 tableinfo_dir1 = "WikiTableQuestions_TableInfo"
 tableinfo_dir2 = "table_index_dir"
 directories = ["./data/wiki/"+tableinfo_dir1 , "./data/wiki/"+tableinfo_dir2]
@@ -97,8 +99,10 @@ if not os.path.exists("./data/wiki/"+tableinfo_dir2):
     os.mkdir("./data/wiki/"+tableinfo_dir2)
 
 
+# Preparation (name of table and summary based on DF)
 # Extract Table Name & Summary from each Table
 # Pydantic class(to instantiate a structured LLM)
+# Ask llm what you want to get from the template
 class TableInfo(BaseModel):
     """Information regarding a structured table."""
 
@@ -111,17 +115,17 @@ class TableInfo(BaseModel):
 
 
 prompt_str = """
-    Give me a summary of the table with the following JSON format.
+Give me a summary of the table with the following JSON format.
 
-    - The table name must be unique to the table and describe it while being concise. 
-    - Do NOT output a generic table name (e.g. table, my_table).
+- The table name must be unique to the table and describe it while being concise. 
+- Do NOT output a generic table name (e.g. table, my_table).
 
-    Do NOT make the table name one of the following: {exclude_table_name_list}
+Do NOT make the table name one of the following: {exclude_table_name_list}
 
-    Table:
-    {table_str}
+Table:
+{table_str}
 
-    Summary: 
+Summary: 
 """
 
 prompt_tmpl = ChatPromptTemplate(message_templates=[ChatMessage.from_str(prompt_str, role="user")])
@@ -140,8 +144,12 @@ def _get_tableinfo_with_index(idx: int) -> str:
         )
 
 
+# Use structured_prediction to control over LLM and Pydantic
+# Structured predict tasks Pydantic class and Prompt Template and *any* variables in the prompt(table_str, exclude_table_name_list)
+
 table_names = set()
 table_infos = []
+
 for idx, df in enumerate(dfs):
     table_info = _get_tableinfo_with_index(idx)
     if table_info:
@@ -229,30 +237,36 @@ sql_database = SQLDatabase(engine)
 metadata_obj = MetaData()
 delete_all_tables(engine)
 
+# Create files, create tables, and insert data.
 for idx, df in enumerate(dfs):
     tableinfo = _get_tableinfo_with_index(idx)
     print(f"Creating table: {tableinfo.table_name}")
     create_table_from_dataframe(df, tableinfo.table_name, engine, metadata_obj)
 
 
-# Build obj_retriever via ObjectIndex
+
+# Build obj_retriever via ObjectIndex (index and retrieve arbitrary python objects)
 # Schema info, Node mapping and Index
+# add a SQLTableSchema for each table
+# return the top 3 most similar objects (in this case, the 3 most relevant SQL table schemas) based on the query.
 
 table_node_mapping = SQLTableNodeMapping(sql_database)
 table_schema_objs = [
     SQLTableSchema(table_name=t.table_name.replace(" ","_"), context_str=t.table_summary) for t in table_infos
-]  # add a SQLTableSchema for each table
+]  
 
 obj_index = ObjectIndex.from_objects(
     table_schema_objs,
     table_node_mapping,
     VectorStoreIndex,
 )
+
 obj_retriever = obj_index.as_retriever(similarity_top_k=3)
 
 
-# Index each Table
-# This is to get better relevant result when querying on field value(i.g, B.I.G, BIG)
+
+# Index each Table and store embedded data into Directory
+# Reason is that This is to get better relevant result when querying on field value(i.g, B.I.G vs BIG)
 
 def index_all_tables(
     sql_database: SQLDatabase, table_index_dir: str = "table_index_dir") -> Dict[str, VectorStoreIndex]:
@@ -307,6 +321,7 @@ def index_all_tables(
 
 
 # Define expanded table parsing
+# Add more relevant data into table_info
 def get_table_context_and_rows_str(
     query_str: str,
     table_schema_objs: List[SQLTableSchema],
@@ -360,6 +375,8 @@ def get_table_context_str(table_schema_objs: List[SQLTableSchema]):
     return "\n\n".join(context_strs)
 
 
+# Parse response to SQL
+# Use default template in llamaindex
 def parse_response_to_sql(chat_response: ChatResponse) -> str:
     """Parse response to SQL."""
     response = chat_response.message.content
@@ -389,7 +406,7 @@ response_synthesis_prompt_str = (
 response_synthesis_prompt = PromptTemplate(response_synthesis_prompt_str,)
 
 
-# workflow
+# Workflow and Events
 class TableRetrieveEvent(Event):
     """Result of running table retrieval."""
     table_context_str: str
