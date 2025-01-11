@@ -3,6 +3,7 @@ import asyncio
 import json
 import re
 import pandas as pd
+import shutil
 
 from typing import List, Dict
 from pathlib import Path
@@ -56,22 +57,28 @@ Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
 llm = Ollama(model="llama3.2", request_timeout=720.0)
 Settings.llm = llm
 
+# Delete directories for initiating
 def delete_file(directory_path):
-  if not os.path.exists(directory_path):
-    raise FileNotFoundError(f"Directory '{directory_path}' not found.")
+    if not os.path.exists(directory_path):
+        raise FileNotFoundError(f"Directory '{directory_path}' not found.")
 
-  for filename in os.listdir(directory_path):
-    file_path = os.path.join(directory_path, filename)
-    try:
-      if os.path.isfile(file_path):
-        os.remove(file_path)
-        print(f"Deleted file: {file_path}")
-    except OSError as e:
-      print(f"Error deleting file '{file_path}': {e}")
+    for filename in os.listdir(directory_path):
+        file_path = os.path.join(directory_path, filename)
+        try:
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+                print(f"Deleted file: {file_path}")
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+            else:
+                print(f"'{file_path}' does not exist or is neither a file nor a directory.")
+        except OSError as e:
+            print(f"Error deleting file '{file_path}': {e}")
 
 
 # Directory for reading with wiki's data as source
 # Create an arrary of dataframe using files in the directory
+
 data_dir = Path("./data/wiki/WikiTableQuestions/csv/100-csv")
 csv_files = sorted([f for f in data_dir.glob("*.csv")])
 dfs = []
@@ -86,6 +93,7 @@ for csv_file in csv_files:
 
 # Two tables (one for metadata, the other for vector data)
 # Delete and Create for testing
+
 tableinfo_dir1 = "WikiTableQuestions_TableInfo"
 tableinfo_dir2 = "table_index_dir"
 directories = ["./data/wiki/"+tableinfo_dir1 , "./data/wiki/"+tableinfo_dir2]
@@ -103,6 +111,7 @@ if not os.path.exists("./data/wiki/"+tableinfo_dir2):
 # Extract Table Name & Summary from each Table
 # Pydantic class(to instantiate a structured LLM)
 # Ask llm what you want to get from the template
+
 class TableInfo(BaseModel):
     """Information regarding a structured table."""
 
@@ -338,6 +347,7 @@ def get_table_context_and_rows_str(
             table_info += table_opt_context
 
         # also lookup vector index to return relevant table rows
+        # this is important step to add more relevant rows from each table
         vector_retriever = vector_index_dict[table_schema_obj.table_name].as_retriever(similarity_top_k=2)
         relevant_nodes = vector_retriever.retrieve(query_str)
         if len(relevant_nodes) > 0:
@@ -511,5 +521,9 @@ async def my_async_function():
     )
     print(str(response))
 
+    response = await workflow2.run(
+        query="Who is Ted"
+    )
+    print(str(response))
 
 asyncio.run(my_async_function())
