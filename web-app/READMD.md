@@ -1,5 +1,12 @@
 ## How to run?
-location: ted-pjt/python/llama/web-app/ted-ai-app
+
+.index: the location to store vector
+
+document: static file on where to question
+
+ted-aipapp: service to run
+
+location: ./web-app/ted-ai-app
 
 1. run flask_demo2.py
 2. run index_server.py
