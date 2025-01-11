@@ -5,28 +5,34 @@ LlamaIndex is an open-source data orchestration framework designed to enhance la
 
 ## Key Features of LlamaIndex
 *Data Integration and Ingestion:*
+
 Supports over 160 data formats, including structured (e.g., SQL databases), semi-structured (e.g., APIs), and unstructured data (e.g., PDFs, images).
 Uses "data connectors" or "readers" to fetch and ingest data from native sources and transform it into a unified format called "Documents."
 
 *Context Augmentation:*
+
 Enhances LLMs by providing external, private, or real-time data to the model's context window.
 Allows LLMs to generate more accurate and relevant responses by supplementing their pre-trained knowledge.
 
 *Indexing:*
+
 Structures ingested data into various index types for efficient querying:
 Vector Store Index: Ideal for semantic search using natural language queries.
 Summary Index: Provides concise summaries of large datasets.
 Knowledge Graph Index: Represents relationships between entities for advanced reasoning.
 
 *Retrieval-Augmented Generation (RAG):*
+
 Combines external data retrieval with LLM capabilities to improve response accuracy.
 Enables applications like chatbots and query engines to dynamically access relevant information during inference.
 
 *Tool Abstractions for Agents:*
+
 Provides tools that AI agents can use to interact with external systems or perform tasks.
 Includes advanced reasoning patterns like ReAct (Reasoning + Action) for multi-step problem-solving.
 
 *Integration with Other Frameworks:*
+
 Compatible with frameworks like LangChain, Flask, Docker, and ChatGPT.
 Offers both high-level APIs for beginners and low-level APIs for advanced customization.
 
