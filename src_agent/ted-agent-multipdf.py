@@ -37,7 +37,13 @@ from llama_index.core.agent.react.types import (
     ObservationReasoningStep,
     ResponseReasoningStep,
 )
-from llama_index.core.agent import Task, AgentChatResponse, ReActChatFormatter, QueryPipelineAgentWorker
+from llama_index.core.agent import (
+    Task, 
+    AgentChatResponse, 
+    ReActChatFormatter, 
+    QueryPipelineAgentWorker, 
+    FnAgentWorker
+)
 from llama_index.core.query_pipeline import (
     AgentInputComponent,
     AgentFnComponent,
@@ -149,7 +155,7 @@ def agent_input_fn(task: Task, state: Dict[str, Any]) -> Dict[str, Any]:
 agent_input_component = AgentInputComponent(fn=agent_input_fn)
 
 
-## Define prompt function
+# Define prompt function
 def react_prompt_fn(
     task: Task, state: Dict[str, Any], input: str, tools: List[BaseTool]
 ) -> List[ChatMessage]:
