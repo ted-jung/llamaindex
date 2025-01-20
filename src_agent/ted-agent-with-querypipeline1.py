@@ -1,28 +1,50 @@
-
-# Multi-PDF agent using Query pipelines and Hyde
+# Agent using Query pipelines 
 # Date: 17, Jan 2025
 # Writer: Ted, Jung
 # Description: Agent and QueryPipeline as tool
 #              NLSQLTableQueryEngine (text to sql)
 #       ~~
 
+import llama_index.core
+import phoenix as px
+
+# Define Agent Input Component
+from typing import Any, Dict, List, Optional, Tuple, cast, Set
+
+from pyvis.network import Network
+from llama_index.core.llms import ChatMessage, ChatResponse
+from llama_index.core.tools import BaseTool
+from llama_index.core.agent import ReActChatFormatter
+from llama_index.core.agent.react.output_parser import ReActOutputParser
+
+from llama_index.core.agent import AgentChatResponse, Task
+from llama_index.core.agent.react.types import (
+    ActionReasoningStep,
+    ObservationReasoningStep,
+    ResponseReasoningStep,
+)
+from llama_index.core.llms import MessageRole
+from llama_index.core.query_pipeline import (
+    InputComponent,
+    Link,
+    QueryComponent,
+    StatefulFnComponent,
+    ToolRunnerComponent,
+)
+
 from llama_index.core import (
     Settings,
+    SQLDatabase
 )
 from llama_index.core.callbacks import CallbackManager
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.ollama import Ollama
-
-callback_manager = CallbackManager()
-
-Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
-llm = Ollama(model="llama3.2", request_timeout=720.0)
-Settings.llm = llm
-Settings.callback_manager = callback_manager
+from llama_index.core.query_pipeline import QueryPipeline as QP
+from llama_index.core.query_engine import NLSQLTableQueryEngine
+from llama_index.core.tools import QueryEngineTool
 
 from tabnanny import verbose
 
-from llama_index.core import SQLDatabase
 from sqlalchemy import (
     Column,
     Integer,
@@ -34,23 +56,30 @@ from sqlalchemy import (
     select,
 )
 
+
+from llama_index.core.agent.types import Task
+from llama_index.core.agent import FnAgentWorker
+
+
+callback_manager = CallbackManager()
+
+Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
+llm = Ollama(model="llama3.2", request_timeout=720.0)
+Settings.llm = llm
+Settings.callback_manager = callback_manager
+
 engine = create_engine("sqlite:///./data/chinook/chinook.db")
 sql_database = SQLDatabase(engine)
 
-import llama_index.core
-import phoenix as px
-from llama_index.core.query_pipeline import QueryPipeline
+
 
 px.launch_app()
 llama_index.core.set_global_handler("arize_phoenix")
 
 
-# =======================================
-# Setup Text-to-SQL Query Engine / Tool
-# =======================================
-
-from llama_index.core.query_engine import NLSQLTableQueryEngine
-from llama_index.core.tools import QueryEngineTool
+# ========================================
+# Setup Text-to-SQL NL Query Engine / Tool
+# ========================================
 
 sql_query_engine = NLSQLTableQueryEngine(
     sql_database=sql_database,
@@ -77,31 +106,14 @@ sql_tool = QueryEngineTool.from_defaults(
 #       4. get response if response is generated
 # ================================================================================
 
-from llama_index.core.query_pipeline import QueryPipeline as QP
-
 qp = QP(verbose=True)
 
-
-# Define Agent Input Component
-from typing import Any, Dict, List, Optional, Tuple, cast
-
-from llama_index.core.agent import AgentChatResponse, Task
-from llama_index.core.agent.react.types import (
-    ActionReasoningStep,
-    ObservationReasoningStep,
-    ResponseReasoningStep,
-)
-from llama_index.core.llms import MessageRole
-from llama_index.core.query_pipeline import (
-    QueryComponent,
-    StatefulFnComponent,
-    ToolRunnerComponent,
-)
 
 
 # Input Component
 ## This is the component that produces agent inputs to the rest of the components
 ## Can also put initialization logic here.
+
 def agent_input_fn(state: Dict[str, Any]) -> str:
     """Agent input function.
 
@@ -121,16 +133,11 @@ def agent_input_fn(state: Dict[str, Any]) -> str:
 agent_input_component = StatefulFnComponent(fn=agent_input_fn)
 
 
+
 ## Define Agent Prompt
 ## generate a ReAct prompt (output by LLM, parses into a structured object)
-
-from llama_index.core.agent import ReActChatFormatter
-from llama_index.core.llms import ChatMessage
-from llama_index.core.query_pipeline import InputComponent, Link
-from llama_index.core.tools import BaseTool
-
-
 ## define prompt function
+
 def react_prompt_fn(
     state: Dict[str, Any], input: str, tools: List[BaseTool]
 ) -> List[ChatMessage]:
@@ -150,18 +157,13 @@ react_prompt_component = StatefulFnComponent(
 )
 
 
+
 ## Define Agent Output Parser + Tool Pipeline
 ## output by LLM with decision tree
 ## given: 
 ##        action -> need to execute the specified tool with args -> process the output
 ##                  tool(name+action) calling via ToolRunnerComponent
 ##        answer -> process the output
-
-from typing import Optional, Set
-
-from llama_index.core.agent.react.output_parser import ReActOutputParser
-from llama_index.core.agent.types import Task
-from llama_index.core.llms import ChatResponse
 
 
 def parse_react_output_fn(state: Dict[str, Any], chat_response: ChatResponse):
@@ -208,9 +210,6 @@ process_response = StatefulFnComponent(fn=process_response_fn)
 ## Stitch together Agent Query Pipeline
 ## agent_input -> react_prompt -> llm -> react_output
 
-from llama_index.core.query_pipeline import QueryPipeline as QP
-from llama_index.llms.ollama import Ollama
-
 qp.add_modules(
     {
         "agent_input": agent_input_component,
@@ -240,23 +239,17 @@ qp.add_link(
     input_fn=lambda x: x["reasoning_step"],
 )
 
-
-from pyvis.network import Network
-
 net = Network(notebook=True, cdn_resources="in_line", directed=True)
 net.from_nx(qp.clean_dag)
 net.show("agent_dag2.html")
 
 
+
 ## Setup Agent Worker around Text-to-SQL Query Pipeline
 ##
-## Custom agent implementation <= FnAgentWorker
+## Custom agent implementation(simple python) => FnAgentWorker
 ## ReAct loop (<-query pipeline)
-##           : given state/step
-from typing import Any, Dict, Tuple
-
-from llama_index.core.agent import FnAgentWorker
-
+##           : right step at a given state
 
 def run_agent_fn(state: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
     """Run agent function."""
@@ -292,17 +285,19 @@ agent = FnAgentWorker(
     initial_state={"query_pipeline": qp, "is_first": True},
 ).as_agent()
 
-
 ## Run the Agent
 ## start task
 task = agent.create_task(
     "What are some tracks from the artist AC/DC? Limit it to 3"
 )
 
-step_output = agent.run_step(task.task_id)
-step_output = agent.run_step(task.task_id)
+# step_output = agent.run_step(task.task_id)
+# step_output = agent.run_step(task.task_id)
 
-print(step_output)
+# print(step_output)
+# print(step_output.is_last)
+# response = agent.finalize_response(task.task_id)
+# print(str(response))
 
 
 # run this e2e
@@ -310,9 +305,7 @@ agent.reset()
 response = agent.chat(
     "What are some tracks from the artist AC/DC? Limit it to 3"
 )
-
-print(step_output.is_last)
+print(str(response))
 
 response = agent.finalize_response(task.task_id)
 
-print(str(response))
