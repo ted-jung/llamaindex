@@ -1,32 +1,32 @@
-# Agent using Query pipelines 
+# Agent using Query pipelines
 # Date: 20, Jan 2025
 # Writer: Ted, Jung
 # Description: Agent and QueryPipeline as tool
 #              NLSQLTableQueryEngine (text to sql) + Retry max
-#       ~~
+#              Result: llama3.2 < llama3.3  (understand well for the complex question)
 
-from llama_index.llms.ollama import Ollama
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.core import (Settings,)
+from typing import Any, Dict, Tuple
 
-
-from llama_index.core.agent import Task, AgentChatResponse
-from typing import Dict, Any
-from llama_index.core.query_pipeline import StatefulFnComponent
 from llama_index.core import (
     PromptTemplate,
     Response,
-    SQLDatabase
+    Settings,
+    SQLDatabase,
 )
-from typing import Tuple
+from llama_index.core.agent import AgentChatResponse, FnAgentWorker, Task
+from llama_index.core.query_engine import NLSQLTableQueryEngine
+from llama_index.core.query_pipeline import (
+    InputComponent,
+    Link,
+    StatefulFnComponent,
+)
 from llama_index.core.query_pipeline import (
     QueryPipeline as QP,
-    Link,
-    InputComponent,
 )
+from llama_index.core import PromptTemplate
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.llms.ollama import Ollama
 from pyvis.network import Network
-from llama_index.core.agent import FnAgentWorker
-
 from sqlalchemy import (
     Column,
     Integer,
@@ -37,12 +37,9 @@ from sqlalchemy import (
     create_engine,
     select,
 )
-from llama_index.core.query_engine import NLSQLTableQueryEngine
-
-
 
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
-llm = Ollama(model="llama3.2", request_timeout=720.0)
+llm = Ollama(model="llama3.3", request_timeout=720.0)
 Settings.llm = llm
 
 
@@ -66,6 +63,8 @@ def agent_input_fn(state: Dict[str, Any]) -> Dict:
 
 agent_input_component = StatefulFnComponent(fn=agent_input_fn)
 
+
+
 retry_prompt_str = """\
 You are trying to generate a proper natural language query given a user input.
 
@@ -82,8 +81,6 @@ Convo history (failed attempts):
 
 New input: """
 retry_prompt = PromptTemplate(retry_prompt_str)
-
-
 
 
 validate_prompt_str = """\
@@ -136,7 +133,6 @@ def agent_output_fn(
 agent_output_component = StatefulFnComponent(fn=agent_output_fn)
 
 
-
 qp = QP(
     modules={
         "input": agent_input_component,
@@ -147,9 +143,6 @@ qp = QP(
     },
     verbose=True,
 )
-
-qp.add_chain(["retry_prompt", "llm", "sql_query_engine", "output_component"])
-
 qp.add_link(
     "input", "retry_prompt", dest_key="input", input_fn=lambda x: x["input"]
 )
@@ -159,6 +152,7 @@ qp.add_link(
     dest_key="convo_history",
     input_fn=lambda x: x["convo_history"],
 )
+qp.add_chain(["retry_prompt", "llm", "sql_query_engine", "output_component"])
 
 
 # net = Network(notebook=True, cdn_resources="in_line", directed=True)
@@ -186,6 +180,7 @@ agent = FnAgentWorker(
     fn=run_agent_fn,
     initial_state={"query_pipeline": qp, "is_first": True},
 ).as_agent()
+
 
 response = agent.chat(
     "How many albums did the artist who wrote 'Restless and Wild' release? (answer should be non-zero)?"
