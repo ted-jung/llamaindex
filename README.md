@@ -26,6 +26,11 @@ Knowledge Graph Index: Represents relationships between entities for advanced re
 Combines external data retrieval with LLM capabilities to improve response accuracy.
 Enables applications like chatbots and query engines to dynamically access relevant information during inference.
 
+*HyDE:*
+
+It supports HyDE (Hypothetical Document Embeddings) by integrating it into its query transformation pipeline. This allows users to generate hypothetical documents based on a query, embed these documents, and use the embeddings to improve retrieval performance.
+LlamaIndex empowers developers to build more accurate and efficient information retrieval systems that leverage both semantic understanding and advanced indexing techniques.
+
 *Tool Abstractions for Agents:*
 
 Provides tools that AI agents can use to interact with external systems or perform tasks.
