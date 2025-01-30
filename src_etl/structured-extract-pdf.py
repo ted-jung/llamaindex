@@ -8,6 +8,7 @@
 
 import json
 
+from pprint import pprint
 from pydantic import BaseModel, Field
 from datetime import datetime
 from llama_index.readers.file import PDFReader
@@ -20,6 +21,12 @@ from llama_index.core import Settings
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
 llm = Ollama(model="llama3.2", request_timeout=720.0)
 Settings.llm = llm
+
+class LineItem2(BaseModel):
+    """A line item in an invoice."""
+
+    card_name: str = Field(description="The card name of this item")
+    price: float = Field(description="The price of this item")
 
 class LineItem(BaseModel):
     """A line item in an invoice."""
@@ -38,8 +45,8 @@ class Invoice(BaseModel):
     line_items: list[LineItem] = Field(
         description="A list of all the items in this invoice"
     )
-    payments: list[LineItem] = Field(
-        description="A list of credit info with name and time"
+    payments: list[LineItem2] = Field(
+        description="A list of credit card info with name and price"
     )
 
 pdf_reader = PDFReader()
@@ -51,9 +58,13 @@ text = documents[0].text
 # sllm: enforce a specific output structure
 sllm = llm.as_structured_llm(Invoice)
 
+
 response = sllm.complete(text)
 
 print(response)
 
 json_response = json.loads(response.text)
 print(json.dumps(json_response,indent=2))
+
+
+pprint(response.raw)
