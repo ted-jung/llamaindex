@@ -1,3 +1,12 @@
+# ===========================================================================
+# Workflow, event Stream
+# Create Date: 31, Jan 2025
+# Update Date: 1, Feb 2025
+# Writer: Ted, Jung
+# Description: 
+# ===========================================================================
+
+
 from llama_index.core.workflow import (
     StartEvent,
     StopEvent,
@@ -36,7 +45,6 @@ class ProgressEvent(Event):
     
 
 class MyWorkflow(Workflow):
-    # llm = Ollama(model="llama3.2", request_timeout=720.0)
     
     @step
     async def step_one(self, ctx: Context, ev: StartEvent) -> FirstEvent:
