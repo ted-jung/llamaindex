@@ -2,7 +2,8 @@
 # DocumentSummaryIndex for Retrieval
 # Date: 31, Jan 2025
 # Writer: Ted, Jung
-# Description: 
+# Description: Two stored datas
+#              (summary of each document, all nodes corresponding to the document)
 #    1. Query based retrieval
 #    2. LLM-based Retrieval
 #    3. Embedding-based Retrieval
@@ -59,9 +60,9 @@ nest_asyncio.apply()
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
 
 
-# List to look up
+# List keyword for look up
+# Loop to fetch the details from the wiki one by one
 wiki_titles = ["Toronto", "Seattle", "Chicago", "Boston", "Houston"]
-
 
 for title in wiki_titles:
     response = requests.get(
@@ -98,8 +99,7 @@ for wiki_title in wiki_titles:
 
 
 
-# Build DocumentSummaryIndex
-# LLM (gpt-4o-mini)
+# Build DocumentSummaryIndex, LLM(gpt-4o-mini or llama3.2)
 # chatgpt = OpenAI(temperature=0, model="gpt-4o-mini")
 chatgpt = OpenAI(temperature=0, model="llama3.2", request_timeout=720.0)
 splitter = SentenceSplitter(chunk_size=1024)
@@ -128,7 +128,7 @@ doc_summary_index = load_index_from_storage(storage_context)
 
 
 
-# Perform Retrieval from Document Summary Index
+# Perform Retrieval to Document Summary Index
 # 1. High-level Querying
 query_engine = doc_summary_index.as_query_engine(
     response_mode="tree_summarize", use_async=True
@@ -141,7 +141,6 @@ print(response)
 
 # 2. LLM-based Retrieval
 
-
 retriever = DocumentSummaryIndexLLMRetriever(
     doc_summary_index,
     # choice_select_prompt=None,
@@ -151,12 +150,12 @@ retriever = DocumentSummaryIndexLLMRetriever(
     # parse_choice_select_answer_fn=None,
 )
 
-retrieved_nodes = retriever.retrieve("What are the sports teams in Toronto?")
-print(100*"=")
-print(len(retrieved_nodes))
+# retrieved_nodes = retriever.retrieve("What are the sports teams in Toronto?")
+# print(100*"=")
+# print(len(retrieved_nodes))
 
-print(retrieved_nodes[0].score)
-print(retrieved_nodes[0].node.get_text())
+# print(retrieved_nodes[0].score)
+# print(retrieved_nodes[0].node.get_text())
 
 
 
@@ -178,11 +177,12 @@ print(response)
 
 # 3. Embedding-based Retrival
 
+print(100*"=")
 retriever = DocumentSummaryIndexEmbeddingRetriever(
     doc_summary_index,
     # similarity_top_k=1,
 )
-retrieved_nodes = retriever.retrieve("What are the sports teams in Toronto?")
+#retrieved_nodes = retriever.retrieve("What are the sports teams in Toronto?")
 
 # configure response synthesizer
 response_synthesizer = get_response_synthesizer(response_mode="tree_summarize")
