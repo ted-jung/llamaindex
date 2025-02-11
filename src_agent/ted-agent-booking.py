@@ -1,25 +1,34 @@
+# ================================================================
 # Agent for booking during chatting
-# Date: 22, Jan 2025
+# Created: 22, Jan 2025
+# Updated: 11, Feb 2025
 # Writer: Ted, Jung
-# Description: Booking agent with functiontool
-#              
+# Description: Booking agent(FunctionCallingagent) with functiontool
+# ================================================================
+
+
 
 from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.ollama import Ollama
+from llama_index.llms.openai import OpenAI
 from typing import Optional
 from llama_index.core.tools import FunctionTool
 from llama_index.core.bridge.pydantic import BaseModel
 
+
 from llama_index.core.llms import ChatMessage
 from llama_index.core.agent import FunctionCallingAgent
 
+
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
-llm = Ollama(model="llama3.2", request_timeout=720.0)
+# llm = Ollama(model="llama3.3", request_timeout=720.0)
+llm = OpenAI(model="gpt-4o-mini", request_timeout=720.0)
 Settings.llm = llm
 
 # we will store booking under random IDs
 bookings = {}
+
 
 
 # we will represent and track the state of a booking as a Pydantic model
@@ -52,6 +61,11 @@ def create_booking(user_id: str) -> str:
     return "Booking created, but not yet confirmed. Please provide your name, email, phone, date, and time."
 
 
+def cancel_booking(user_id: str) -> str:
+    """Cancel new booking request for a given user"""
+    raise ValueError("Sorry")
+
+
 def confirm_booking(user_id: str) -> str:
     """Confirm a booking for a given booking ID."""
     booking = bookings[user_id]
@@ -74,17 +88,21 @@ def confirm_booking(user_id: str) -> str:
     return f"Booking ID {user_id} confirmed!"
 
 
+
 # create tools for each function
 get_booking_state_tool = FunctionTool.from_defaults(fn=get_booking_state)
 update_booking_tool = FunctionTool.from_defaults(fn=update_booking)
 create_booking_tool = FunctionTool.from_defaults(
     fn=create_booking, return_direct=True
 )
+cancel_booking_tool=FunctionTool.from_defaults(
+    fn=cancel_booking, return_direct=True
+)
 confirm_booking_tool = FunctionTool.from_defaults(
     fn=confirm_booking, return_direct=True
 )
 
-user = "John Doe"
+user = "Ted Jung"
 
 prefix_messages = [
     ChatMessage(
@@ -93,8 +111,9 @@ prefix_messages = [
             f"You are now connected to the booking system and helping {user} with making a booking. "
             "Only enter details that the user has explicitly provided. "
             "Do not make up any details."
+            # f"If the user is {user}, call cancel_booking tool."
         ),
-    )
+    ),
 ]
 
 agent = FunctionCallingAgent.from_tools(
@@ -103,6 +122,7 @@ agent = FunctionCallingAgent.from_tools(
         update_booking_tool,
         create_booking_tool,
         confirm_booking_tool,
+        cancel_booking_tool,
     ],
     llm=llm,
     prefix_messages=prefix_messages,
@@ -112,6 +132,12 @@ agent = FunctionCallingAgent.from_tools(
 )
 
 
-response = agent.chat("Hello! I would like to make a booking, around 5pm?")
+# response = agent.chat("Hello! I'm Ted Jung. I would like to make a booking, around 5pm?")
 
-print(str(response))
+# print(str(response))
+
+# response = agent.chat("Sure! My name is Ted Jung, and my email is tedjung@gmail.com")
+
+# print(str(response))
+
+agent.chat_repl()
