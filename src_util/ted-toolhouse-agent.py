@@ -1,10 +1,11 @@
 # ===========================================================================
-# Agent as as Service (Agent + Workflow)
+# Tool as as Service (Agent + Workflow & External Tools)
 # Created: 18, Feb 2025
-# Updated: 18, Feb 2025
+# Updated: 19, Feb 2025
 # Writer: Ted, Jung
 # Description: 
-#   External Service (create agent having lot of tools)
+#   External Service (create agent having lot of tools where existing externally)
+#   Tool as a Service
 # ===========================================================================
 
 
@@ -59,15 +60,17 @@ class LogEvent(Event):
     msg: str
 
 
+
+
 # ReAct will use bundle(from ToolHouse) as a tool with llm (create a bundle before using it)
 # CMB will be used to store history of actions to keep the context
 
 class SalesRepWorkflow(Workflow):
-    agent = ReActAgent(
-        tools=th.get_tools(bundle="Ted-Bundle-10ed9a04"),
+
+    agent = ReActAgent.from_tools(
+        tools=th.get_tools(bundle="PredictivePredictorPrime_c03d422d"),
         llm=llm,
-        memory=ChatMemoryBuffer.from_defaults(),
-        verbose=True
+        memory=ChatMemoryBuffer.from_defaults()
     )
 
     @step
@@ -75,9 +78,10 @@ class SalesRepWorkflow(Workflow):
         ctx.write_event_to_stream(
             LogEvent(msg=f"Getting the contents of {ev.url}…")
         )
-        prompt = f"Get the page contents of {ev.url}, then summarize its key value propositions in a few bullet points."
+        prompt = f"Get the contents of {ev.url}, then summarize its key value propositions in a few bullet points."
         contents = await self.agent.achat(prompt)
         
+        print(contents)
         return WebsiteContentEvent(contents=str(contents.response))
 
     @step
@@ -90,6 +94,8 @@ class SalesRepWorkflow(Workflow):
         prompt = """With that you know about the business, perform a web search to find 5 tech companies who may benefit
                  from the business's product. Only answer with the names of the companies you chose."""
         results = await self.agent.achat(prompt)
+
+        print(results)
         return WebSearchEvent(results=str(results.response))
 
     @step
@@ -126,10 +132,13 @@ class SalesRepWorkflow(Workflow):
 
 async def main():
     workflow = SalesRepWorkflow(timeout=None)
-    handler = await workflow.run(url="https://toolhouse.ai")
-    async for event in handler.stream_events():
-        if isinstance(event, LogEvent):
-            print(event.msg)
+    response = await workflow.run(url="https://toolhouse.ai")
+    
+    print(response)
+    
+    # async for event in handler.stream_events():
+    #     if isinstance(event, LogEvent):
+    #         print(event.msg)
 
 
 
