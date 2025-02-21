@@ -7,7 +7,7 @@
 #   Scrap web page -> Indexing -> PromptTemplate -> Query
 # ===========================================================================
 
-
+import smtplib
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -106,11 +106,30 @@ def ted_source_data(url):
 
 
 
+# need to update
+def email_to(message):
+    # creates SMTP session
+    s = smtplib.SMTP('smtp.gmail.com', 587)
+    # start TLS for security
+    s.starttls()
+    # Authentication
+    s.login("aaa@bbb.com", "pass")
+    # message to be sent
+    message = f"{message}"
+    # sending the mail
+    s.sendmail("aaa@bbb.com", "aaa@bbb.com", message)
+    # terminating the session
+    s.quit()
+
+
+
 # Main
 if __name__ == "__main__":
 
-    career_response = ted_source_data('https://xxx.com/company/careers')
+    career_response = ted_source_data('https://aaa.com/company/careers')
 
-    response = ted_query(career_response, "Given index is two fields opened Job, Country. Find job position each country and count jobs be opened in each contry with alphabet order", "Shakespeare")
-    print(response)
+    message = ted_query(career_response, "Given index is two fields opened Job, Country. Find job position each country and count jobs be opened in each contry with alphabet order", "Shakespeare")
+    print(message)
+
+    # email_to(message)    
 
